@@ -1,0 +1,20 @@
+﻿@model Employees.ViewModels.FormFileViewModel
+
+<div class="offset-3">
+    <form method="post" enctype="multipart/form-data">
+        <div>
+            <label asp-for="@Model.ExcelFile)"></label>
+            <input class="btn btn-light" asp-for="@Model.ExcelFile" />
+            <span asp-validation-for="@Model.ExcelFile" class="text-danger"></span>
+        </div>
+        <div class="mt-5 offset-3">
+            <input value="List All" class="btn btn-primary mr-4" type="submit" asp-action="AllTimesWorked" />
+            <input value="Get Longest time(s)" class="btn btn-primary" type="submit" asp-action="LongestTimesWorked" />
+        </div>
+    </form>
+</div>
+
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

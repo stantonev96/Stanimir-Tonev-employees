@@ -1,50 +1,64 @@
-﻿using System;
+﻿using Employees.Data;
+using Employees.ViewModels;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 
-namespace Sandbox
+namespace Employees.Services
 {
-    class Program
+    public class EmployeeService : IEmployeeService
     {
-        static void Main(string[] args)
+        private Dictionary<int, List<Employee>> employeesOnSameProject;
+        private Dictionary<int, List<AllProjectsViewModel>> allTimeWorkedTogether;
+
+        public EmployeeService()
         {
-            var employeesOnSameProject = new Dictionary<int, List<Employee>>();
+            employeesOnSameProject = new Dictionary<int, List<Employee>>();
+            allTimeWorkedTogether = new Dictionary<int, List<AllProjectsViewModel>>();
+        }
 
-            var allTimeWorkedTogether = new Dictionary<int, List<Info>>();
-            var longestTimeWorkedTogether = new List<Info>();
+        public IEnumerable<AllProjectsViewModel> GetAllEmployees(string filePath)
+        {       
+            var viewModel = new List<AllProjectsViewModel>();
 
-            string[] lines = File.ReadAllLines(
-                Directory.GetCurrentDirectory().ToString() + "\\employees.csv");
+            string[] lines = File.ReadAllLines(filePath);
+            employeesOnSameProject = GetEmployeesOnCommonProjects(lines);
+            allTimeWorkedTogether = CalculateTotalDaysOnCommonProjects();
+           
+            return viewModel = allTimeWorkedTogether.SelectMany(x => x.Value).ToList();
+        }
+        public IEnumerable<AllProjectsViewModel> FindLongestTime(string filePath)
+        {
+            var viewModel = new List<AllProjectsViewModel>();
 
+            string[] lines = File.ReadAllLines(filePath);
+            employeesOnSameProject = GetEmployeesOnCommonProjects(lines);
+            allTimeWorkedTogether = CalculateTotalDaysOnCommonProjects();
+
+            var findMax = allTimeWorkedTogether.SelectMany(x => x.Value).Max(y => y.TimeInDays);
+
+            return viewModel = allTimeWorkedTogether.SelectMany(x => x.Value).Where(y => y.TimeInDays == findMax).ToList();
+        }
+
+        private Dictionary<int, List<Employee>> GetEmployeesOnCommonProjects(string[] lines)
+        {
             foreach (var emp in lines)
             {
                 string[] line = emp.Split(";");
 
                 int empId = int.Parse(line[0]);
                 int projectId = int.Parse(line[1]);
-
-                string[] dateFromParts = line[2].Split("-");
-                int yearFrom = int.Parse(dateFromParts[0]);
-                int monthFrom = int.Parse(dateFromParts[1]);
-                int dayFrom = int.Parse(dateFromParts[2]);
-                DateTime dateFrom = new DateTime(yearFrom, monthFrom, dayFrom);
-
+               
+                DateTime dateFrom = DateTime.Parse(line[2], CultureInfo.InvariantCulture);
                 DateTime dateTo;
-                if (line[3].Contains("-"))
-                {
-                    string[] dateToParts = line[3].Split("-");
-                    int yearTo = int.Parse(dateToParts[0]);
-                    int monthTo = int.Parse(dateToParts[1]);
-                    int dayTo = int.Parse(dateToParts[2]);
-                    dateTo = new DateTime(yearTo, monthTo, dayTo);
-                }
-                else
+
+                if (!DateTime.TryParse(line[3], out dateTo))
                 {
                     dateTo = DateTime.UtcNow.Date;
                 }
-
+               
                 var employee = new Employee
                 {
                     EmployeeId = empId,
@@ -61,20 +75,14 @@ namespace Sandbox
                 employeesOnSameProject[projectId].Add(employee);
             }
 
+            return employeesOnSameProject;
+        }
+
+        private Dictionary<int, List<AllProjectsViewModel>> CalculateTotalDaysOnCommonProjects()
+        {
             foreach (var emp in employeesOnSameProject)
             {
-                Console.WriteLine($"Project {emp.Key}");
-
-                foreach (var currEmpOnProj in emp.Value)
-                {
-                    Console.WriteLine($"{currEmpOnProj.EmployeeId}, {currEmpOnProj.DateFrom.ToShortDateString()}, " +
-                        $"{currEmpOnProj.DateTo.Value.ToShortDateString()}");
-                }
-            }
-
-            foreach (var emp in employeesOnSameProject)
-            {
-                var infos = new List<Info>();
+                var infos = new List<AllProjectsViewModel>();
                 if (emp.Value.Count != 1)
                 {
                     var employees = emp.Value;
@@ -83,7 +91,7 @@ namespace Sandbox
                     {
                         for (int other = 0; other < employees.Count; other++)
                         {
-                            var info = new Info();
+                            var info = new AllProjectsViewModel();
                             info.EmployeeIds[0] = employees[curr].EmployeeId;
                             info.EmployeeIds[1] = 0;
                             info.ProjectId = emp.Key;
@@ -95,19 +103,19 @@ namespace Sandbox
                                    && employees[other].DateFrom <= employees[curr].DateTo
                                    && employees[curr].DateTo <= employees[other].DateTo)
                                 {
-                                    info.LongestTimeInDays = (employees[curr].DateTo - employees[curr].DateFrom).Value.Days;
+                                    info.TimeInDays = (employees[curr].DateTo - employees[curr].DateFrom).Value.Days;
                                 }
 
                                 else if (employees[other].DateFrom <= employees[curr].DateFrom
                                    && employees[curr].DateFrom <= employees[other].DateTo)
                                 {
-                                    info.LongestTimeInDays = (employees[other].DateTo - employees[curr].DateFrom).Value.Days;
+                                    info.TimeInDays = (employees[other].DateTo - employees[curr].DateFrom).Value.Days;
                                 }
 
                                 else if (employees[other].DateFrom <= employees[curr].DateTo
                                    && employees[curr].DateTo <= employees[other].DateTo)
                                 {
-                                    info.LongestTimeInDays = (employees[curr].DateTo - employees[other].DateFrom).Value.Days;
+                                    info.TimeInDays = (employees[curr].DateTo - employees[other].DateFrom).Value.Days;
                                 }
 
                                 info.EmployeeIds[1] = employees[other].EmployeeId;
@@ -117,7 +125,7 @@ namespace Sandbox
                                 var infoExists = infos
                                     .Where(x => x.EmployeeIds[0] == info.EmployeeIds[0] &&
                                                 x.EmployeeIds[1] == info.EmployeeIds[1] &&
-                                                x.LongestTimeInDays == info.LongestTimeInDays
+                                                x.TimeInDays == info.TimeInDays
                                           ).FirstOrDefault();
 
                                 if (infoExists is null)
@@ -127,7 +135,7 @@ namespace Sandbox
 
                                 if (!allTimeWorkedTogether.ContainsKey(info.ProjectId))
                                 {
-                                    allTimeWorkedTogether[info.ProjectId] = new List<Info>();
+                                    allTimeWorkedTogether[info.ProjectId] = new List<AllProjectsViewModel>();
                                 }
 
                                 allTimeWorkedTogether[info.ProjectId] = infos;
@@ -136,20 +144,7 @@ namespace Sandbox
                     }
                 }
             }
-
-            Console.WriteLine();
-
-            foreach (var emp in allTimeWorkedTogether)
-            {
-                foreach (var k in emp.Value)
-                {
-                    Console.WriteLine($"{emp.Key} {string.Join(" ", k.EmployeeIds)} {k.LongestTimeInDays}");
-                }
-            }
-
-            var findMax = allTimeWorkedTogether.SelectMany(x => x.Value).Max(y => y.LongestTimeInDays);
-
-            longestTimeWorkedTogether = allTimeWorkedTogether.SelectMany(x => x.Value).Where(y => y.LongestTimeInDays == findMax).ToList();
+            return allTimeWorkedTogether;
         }
     }
 }
